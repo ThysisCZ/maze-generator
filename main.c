@@ -83,7 +83,7 @@ void break_wall(Cell *cells, int start_index, int random_nb, bool breaked)
 
     for (int i = 0; !breaked; i++)
     {
-        if (cells[i].pos.x && cells[i].pos.y)
+        if (nb_pos_x <= WIDTH - cell_size && nb_pos_y <= HEIGHT - cell_size)
         {
             float cur_pos_x = cells[i].pos.x;
             float cur_pos_y = cells[i].pos.y;
@@ -99,6 +99,10 @@ void break_wall(Cell *cells, int start_index, int random_nb, bool breaked)
 
                 breaked = true;
             }
+        }
+        else
+        {
+            break;
         }
     }
 }
