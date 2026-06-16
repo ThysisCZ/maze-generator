@@ -65,7 +65,7 @@ static bool player_in_spaces(Player *player, Space *spaces, int max_index)
 
     for (int i = 0; i < point_count; i++)
     {
-        float angle = i * (2.0f * PI / 8.0f);
+        float angle = i * (2 * PI / point_count);
         float px = cx + PLAYER_RADIUS * cosf(angle);
         float py = cy + PLAYER_RADIUS * sinf(angle);
 
@@ -80,9 +80,9 @@ static bool player_in_spaces(Player *player, Space *spaces, int max_index)
 
 static bool point_in_finish(float px, float py, Space *spaces)
 {
-    int finish_index = 99;
-    float fx = spaces[finish_index].pos.x;
-    float fy = spaces[finish_index].pos.y;
+    int last_index = 99;
+    float fx = spaces[last_index].pos.x;
+    float fy = spaces[last_index].pos.y;
 
     if (px >= fx && px <= fx + CELL_SIZE && py >= fy && py <= fy + CELL_SIZE)
     {
@@ -96,8 +96,9 @@ static bool player_in_finish(Player *player, Space *spaces)
 {
     float cx = player->pos.x;
     float cy = player->pos.y;
+    int point_count = 8;
 
-    float angle = 2.0f * PI / 8.0f;
+    float angle = 2 * PI / point_count;
     float px = cx + PLAYER_RADIUS * cosf(angle);
     float py = cy + PLAYER_RADIUS * sinf(angle);
 
@@ -114,7 +115,7 @@ void create_cells(Cell *cells, Space *spaces)
     for (int i = 0; i < CELL_COUNT; i++)
     {
         int col = i % GRID_WIDTH;
-        int row = i / GRID_HEIGHT;
+        int row = i / GRID_WIDTH;
         float pos_x = CELL_SIZE + col * 2 * CELL_SIZE;
         float pos_y = CELL_SIZE + row * 2 * CELL_SIZE;
         int dir_count = 4;
@@ -138,7 +139,7 @@ void break_wall(Cell *cells, int current_index, Space *spaces)
     cells[current_index].visited = true;
 
     int col = current_index % GRID_WIDTH;
-    int row = current_index / GRID_HEIGHT;
+    int row = current_index / GRID_WIDTH;
 
     int neighbors[4] = {-1, -1, -1, -1};
     int directions[4] = {-1, -1, -1, -1};
@@ -231,6 +232,42 @@ void break_wall(Cell *cells, int current_index, Space *spaces)
     stack_index--;
 }
 
+void draw_maze(Cell *cells, Space *spaces)
+{
+    // Draw all cells
+    for (int i = 0; i < CELL_COUNT; i++)
+    {
+        // Redraw spaces
+        for (int i = 1; i < GAME_MAP_WIDTH * GAME_MAP_HEIGHT; i++)
+        {
+            float sx = spaces[i].pos.x;
+            float sy = spaces[i].pos.y;
+
+            if (sx && sy)
+            {
+                DrawRectangle(sx, sy, CELL_SIZE, CELL_SIZE, WHITE);
+            }
+        }
+
+        Color color;
+
+        switch (i)
+        {
+        case 0:
+            color = RED;
+            break;
+        case CELL_COUNT - 1:
+            color = GREEN;
+            break;
+        default:
+            color = WHITE;
+            break;
+        }
+
+        DrawRectangle(cells[i].pos.x, cells[i].pos.y, CELL_SIZE, CELL_SIZE, color);
+    }
+}
+
 void update_player(Player *player, Space *spaces)
 {
     if (IsKeyDown(KEY_RIGHT))
@@ -264,6 +301,9 @@ void update_player(Player *player, Space *spaces)
         player->pos.x = 3 * CELL_SIZE / 2;
         player->pos.y = 3 * CELL_SIZE / 2;
 
+        stack_index = 0;
+        wall_index = CELL_COUNT - 1;
+
         create_cells(&cells[0], &spaces[0]);
 
         int start_index = GetRandomValue(0, CELL_COUNT - 1);
@@ -271,49 +311,6 @@ void update_player(Player *player, Space *spaces)
     }
 
     draw_player(player->pos.x, player->pos.y);
-}
-
-void draw_maze(Cell *cells)
-{
-    // Draw all cells
-    for (int i = 0; i < CELL_COUNT; i++)
-    {
-        Color color;
-
-        switch (i)
-        {
-        case 0:
-            color = RED;
-            break;
-        case CELL_COUNT - 1:
-            color = GREEN;
-            break;
-        default:
-            color = WHITE;
-            break;
-        }
-
-        DrawRectangle(cells[i].pos.x, cells[i].pos.y, CELL_SIZE, CELL_SIZE, color);
-    }
-
-    // Redraw broken walls
-    for (int i = 0; i < CELL_COUNT; i++)
-    {
-        float start_pos_x = cells[i].pos.x;
-        float start_pos_y = cells[i].pos.y;
-
-        // Check next column position
-        if (walls_broken[i][0])
-        {
-            DrawRectangle(start_pos_x + CELL_SIZE, start_pos_y, CELL_SIZE, CELL_SIZE, WHITE);
-        }
-
-        // Check next row position
-        if (walls_broken[i][1])
-        {
-            DrawRectangle(start_pos_x, start_pos_y + CELL_SIZE, CELL_SIZE, CELL_SIZE, WHITE);
-        }
-    }
 }
 
 int main()
@@ -339,7 +336,7 @@ int main()
         BeginDrawing();
         ClearBackground(BLACK);
 
-        draw_maze(&cells[0]);
+        draw_maze(&cells[0], &spaces[0]);
         update_player(&player, &spaces[0]);
 
         EndDrawing();
