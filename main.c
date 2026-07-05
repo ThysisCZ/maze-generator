@@ -5,6 +5,7 @@
 #define SCREEN_WIDTH 840
 #define SCREEN_HEIGHT 840
 #define CELL_COUNT 100
+#define MAX_SPACE_COUNT CELL_COUNT + 99
 #define CELL_SIZE 40
 #define GRID_WIDTH 10
 #define GRID_HEIGHT 10
@@ -29,24 +30,29 @@ typedef struct
     Vector2 pos;
 } Space;
 
-Cell cells[CELL_COUNT];
-int stack_index = 0;
-Cell stack[CELL_COUNT];
-bool walls_broken[CELL_COUNT][4];
-Space spaces[GAME_MAP_WIDTH * GAME_MAP_HEIGHT];
-int wall_index = CELL_COUNT - 1;
+typedef struct
+{
+    Cell cells[CELL_COUNT];
+    Space spaces[GAME_MAP_WIDTH * GAME_MAP_HEIGHT];
+    bool walls_broken[CELL_COUNT][4];
+    Cell stack[CELL_COUNT];
+    int stack_index;
+    int wall_index;
+    int start_index;
+    Player player;
+} Maze;
 
 void draw_player(float pos_x, float pos_y)
 {
     DrawCircle(pos_x, pos_y, PLAYER_RADIUS, BLUE);
 }
 
-static bool point_in_spaces(float px, float py, Space *spaces, int max_index)
+static bool point_in_spaces(float px, float py, Maze *maze)
 {
-    for (int i = 0; i <= max_index; i++)
+    for (int i = 0; i <= maze->wall_index; i++)
     {
-        float sx = spaces[i].pos.x;
-        float sy = spaces[i].pos.y;
+        float sx = maze->spaces[i].pos.x;
+        float sy = maze->spaces[i].pos.y;
 
         if (px >= sx && px <= sx + CELL_SIZE && py >= sy && py <= sy + CELL_SIZE)
         {
@@ -57,10 +63,10 @@ static bool point_in_spaces(float px, float py, Space *spaces, int max_index)
     return false;
 }
 
-static bool player_in_spaces(Player *player, Space *spaces, int max_index)
+static bool player_in_spaces(Maze *maze)
 {
-    float cx = player->pos.x;
-    float cy = player->pos.y;
+    float cx = maze->player.pos.x;
+    float cy = maze->player.pos.y;
     int point_count = 8;
 
     for (int i = 0; i < point_count; i++)
@@ -69,7 +75,7 @@ static bool player_in_spaces(Player *player, Space *spaces, int max_index)
         float px = cx + PLAYER_RADIUS * cosf(angle);
         float py = cy + PLAYER_RADIUS * sinf(angle);
 
-        if (!point_in_spaces(px, py, spaces, max_index))
+        if (!point_in_spaces(px, py, maze))
         {
             return false;
         }
@@ -78,11 +84,11 @@ static bool player_in_spaces(Player *player, Space *spaces, int max_index)
     return true;
 }
 
-static bool point_in_finish(float px, float py, Space *spaces)
+static bool point_in_finish(float px, float py, Maze *maze)
 {
     int last_index = 99;
-    float fx = spaces[last_index].pos.x;
-    float fy = spaces[last_index].pos.y;
+    float fx = maze->spaces[last_index].pos.x;
+    float fy = maze->spaces[last_index].pos.y;
 
     if (px >= fx && px <= fx + CELL_SIZE && py >= fy && py <= fy + CELL_SIZE)
     {
@@ -92,17 +98,17 @@ static bool point_in_finish(float px, float py, Space *spaces)
     return false;
 }
 
-static bool player_in_finish(Player *player, Space *spaces)
+static bool player_in_finish(Maze *maze)
 {
-    float cx = player->pos.x;
-    float cy = player->pos.y;
+    float cx = maze->player.pos.x;
+    float cy = maze->player.pos.y;
     int point_count = 8;
 
     float angle = 2 * PI / point_count;
     float px = cx + PLAYER_RADIUS * cosf(angle);
     float py = cy + PLAYER_RADIUS * sinf(angle);
 
-    if (!point_in_finish(px, py, spaces))
+    if (!point_in_finish(px, py, maze))
     {
         return false;
     }
@@ -110,7 +116,7 @@ static bool player_in_finish(Player *player, Space *spaces)
     return true;
 }
 
-void create_cells(Cell *cells, Space *spaces)
+void create_cells(Maze *maze)
 {
     for (int i = 0; i < CELL_COUNT; i++)
     {
@@ -120,23 +126,23 @@ void create_cells(Cell *cells, Space *spaces)
         float pos_y = CELL_SIZE + row * 2 * CELL_SIZE;
         int dir_count = 4;
 
-        cells[i].pos = (Vector2){pos_x, pos_y};
-        cells[i].visited = false;
+        maze->cells[i].pos = (Vector2){pos_x, pos_y};
+        maze->cells[i].visited = false;
 
-        spaces[i].pos = (Vector2){pos_x, pos_y};
+        maze->spaces[i].pos = (Vector2){pos_x, pos_y};
 
         // Initialize wall tracking
         for (int j = 0; j < dir_count; j++)
         {
-            walls_broken[i][j] = false;
+            maze->walls_broken[i][j] = false;
         }
     }
 }
 
-void break_wall(Cell *cells, int current_index, Space *spaces)
+void break_wall(Maze *maze, int current_index)
 {
-    stack[stack_index++] = cells[current_index];
-    cells[current_index].visited = true;
+    maze->stack[maze->stack_index++] = maze->cells[current_index];
+    maze->cells[current_index].visited = true;
 
     int col = current_index % GRID_WIDTH;
     int row = current_index / GRID_WIDTH;
@@ -181,42 +187,42 @@ void break_wall(Cell *cells, int current_index, Space *spaces)
         int next_index = neighbors[random_nb];
         int direction = directions[random_nb];
 
-        if (next_index >= 0 && !cells[next_index].visited)
+        if (next_index >= 0 && !maze->cells[next_index].visited)
         {
             // Mark the wall as broken
-            walls_broken[current_index][direction] = true;
+            maze->walls_broken[current_index][direction] = true;
 
             int opposite_direction = (direction + 2) % 4;
-            walls_broken[next_index][opposite_direction] = true;
+            maze->walls_broken[next_index][opposite_direction] = true;
 
             float pos_x = 0;
             float pos_y = 0;
-            wall_index++;
+            maze->wall_index++;
 
             // Get broken wall position based on direction
             switch (direction)
             {
             case 0: // right
-                pos_x = cells[current_index].pos.x + CELL_SIZE;
-                pos_y = cells[current_index].pos.y;
+                pos_x = maze->cells[current_index].pos.x + CELL_SIZE;
+                pos_y = maze->cells[current_index].pos.y;
                 break;
             case 1: // bottom
-                pos_x = cells[current_index].pos.x;
-                pos_y = cells[current_index].pos.y + CELL_SIZE;
+                pos_x = maze->cells[current_index].pos.x;
+                pos_y = maze->cells[current_index].pos.y + CELL_SIZE;
                 break;
             case 2: // left
-                pos_x = cells[current_index].pos.x - CELL_SIZE;
-                pos_y = cells[current_index].pos.y;
+                pos_x = maze->cells[current_index].pos.x - CELL_SIZE;
+                pos_y = maze->cells[current_index].pos.y;
                 break;
             case 3: // top
-                pos_x = cells[current_index].pos.x;
-                pos_y = cells[current_index].pos.y - CELL_SIZE;
+                pos_x = maze->cells[current_index].pos.x;
+                pos_y = maze->cells[current_index].pos.y - CELL_SIZE;
                 break;
             }
 
-            spaces[wall_index].pos = (Vector2){pos_x, pos_y};
+            maze->spaces[maze->wall_index].pos = (Vector2){pos_x, pos_y};
 
-            break_wall(cells, next_index, spaces);
+            break_wall(maze, next_index);
         }
         else
         {
@@ -229,24 +235,21 @@ void break_wall(Cell *cells, int current_index, Space *spaces)
     }
 
     // Backtrack after dead end
-    stack_index--;
+    maze->stack_index--;
 }
 
-void draw_maze(Cell *cells, Space *spaces)
+void draw_maze(Maze *maze)
 {
     // Draw all cells
     for (int i = 0; i < CELL_COUNT; i++)
     {
         // Redraw spaces
-        for (int i = 1; i < GAME_MAP_WIDTH * GAME_MAP_HEIGHT; i++)
+        for (int i = 1; i < MAX_SPACE_COUNT; i++)
         {
-            float sx = spaces[i].pos.x;
-            float sy = spaces[i].pos.y;
+            float sx = maze->spaces[i].pos.x;
+            float sy = maze->spaces[i].pos.y;
 
-            if (sx && sy)
-            {
-                DrawRectangle(sx, sy, CELL_SIZE, CELL_SIZE, WHITE);
-            }
+            DrawRectangle(sx, sy, CELL_SIZE, CELL_SIZE, WHITE);
         }
 
         Color color;
@@ -264,53 +267,51 @@ void draw_maze(Cell *cells, Space *spaces)
             break;
         }
 
-        DrawRectangle(cells[i].pos.x, cells[i].pos.y, CELL_SIZE, CELL_SIZE, color);
+        DrawRectangle(maze->cells[i].pos.x, maze->cells[i].pos.y, CELL_SIZE, CELL_SIZE, color);
     }
 }
 
-void update_player(Player *player, Space *spaces)
+void update_player(Maze *maze)
 {
     if (IsKeyDown(KEY_RIGHT))
     {
-        player->pos.x += PLAYER_SPEED;
+        maze->player.pos.x += PLAYER_SPEED;
     }
 
     if (IsKeyDown(KEY_DOWN))
     {
-        player->pos.y += PLAYER_SPEED;
+        maze->player.pos.y += PLAYER_SPEED;
     }
 
     if (IsKeyDown(KEY_LEFT))
     {
-        player->pos.x -= PLAYER_SPEED;
+        maze->player.pos.x -= PLAYER_SPEED;
     }
 
     if (IsKeyDown(KEY_UP))
     {
-        player->pos.y -= PLAYER_SPEED;
+        maze->player.pos.y -= PLAYER_SPEED;
     }
 
-    if (!player_in_spaces(player, spaces, wall_index))
+    if (!player_in_spaces(maze))
     {
-        player->pos.x = 3 * CELL_SIZE / 2;
-        player->pos.y = 3 * CELL_SIZE / 2;
+        maze->player.pos.x = 3 * CELL_SIZE / 2;
+        maze->player.pos.y = 3 * CELL_SIZE / 2;
     }
 
-    if (player_in_finish(player, spaces))
+    if (player_in_finish(maze))
     {
-        player->pos.x = 3 * CELL_SIZE / 2;
-        player->pos.y = 3 * CELL_SIZE / 2;
+        maze->player.pos.x = 3 * CELL_SIZE / 2;
+        maze->player.pos.y = 3 * CELL_SIZE / 2;
 
-        stack_index = 0;
-        wall_index = CELL_COUNT - 1;
+        maze->stack_index = 0;
+        maze->wall_index = CELL_COUNT - 1;
 
-        create_cells(&cells[0], &spaces[0]);
-
-        int start_index = GetRandomValue(0, CELL_COUNT - 1);
-        break_wall(&cells[0], start_index, &spaces[0]);
+        create_cells(maze);
+        break_wall(maze, maze->start_index);
     }
 
-    draw_player(player->pos.x, player->pos.y);
+    draw_player(maze->player.pos.x, maze->player.pos.y);
 }
 
 int main()
@@ -319,25 +320,29 @@ int main()
 
     SetTargetFPS(60);
 
-    create_cells(&cells[0], &spaces[0]);
+    Maze maze;
 
-    int start_index = GetRandomValue(0, CELL_COUNT - 1);
-    break_wall(&cells[0], start_index, &spaces[0]);
+    maze.stack_index = 0;
+    maze.wall_index = CELL_COUNT - 1;
+    maze.start_index = 0;
 
-    float pos_x = cells[0].pos.x + CELL_SIZE / 2;
-    float pos_y = cells[0].pos.y + CELL_SIZE / 2;
+    create_cells(&maze);
+    break_wall(&maze, maze.start_index);
+
+    float pos_x = maze.cells[0].pos.x + CELL_SIZE / 2;
+    float pos_y = maze.cells[0].pos.y + CELL_SIZE / 2;
 
     Vector2 start_pos = {pos_x, pos_y};
 
-    Player player = {start_pos};
+    maze.player.pos = start_pos;
 
     while (!WindowShouldClose())
     {
         BeginDrawing();
         ClearBackground(BLACK);
 
-        draw_maze(&cells[0], &spaces[0]);
-        update_player(&player, &spaces[0]);
+        draw_maze(&maze);
+        update_player(&maze);
 
         EndDrawing();
     }
