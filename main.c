@@ -5,7 +5,8 @@
 #define SCREEN_WIDTH 840
 #define SCREEN_HEIGHT 840
 #define NEIGHBOR_COUNT 100
-#define CELL_COUNT NEIGHBOR_COUNT + 99
+#define WALL_COUNT NEIGHBOR_COUNT - 1
+#define CELL_COUNT NEIGHBOR_COUNT + WALL_COUNT
 #define MAX_DIRECTIONS 4
 #define RIGHT 0
 #define BOTTOM 1
@@ -285,7 +286,7 @@ void carve_path(Maze *maze, int current_index)
 
 void draw_maze(Maze *maze)
 {
-    // Draw all cells
+    // Draw all neighboring cells
     for (int i = 0; i < NEIGHBOR_COUNT; i++)
     {
         switch (i)
@@ -351,7 +352,7 @@ void update_player(Maze *maze)
     {
         maze->player.pos.x = 3 * CELL_SIZE / 2;
         maze->player.pos.y = 3 * CELL_SIZE / 2;
-        maze->wall_index = NEIGHBOR_COUNT - 1;
+        maze->wall_index = WALL_COUNT;
 
         init_grid(maze);
         carve_path(maze, maze->start_index);
@@ -368,7 +369,7 @@ int main()
 
     Maze maze;
 
-    maze.wall_index = NEIGHBOR_COUNT - 1;
+    maze.wall_index = WALL_COUNT;
     maze.start_index = 0;
 
     init_grid(&maze);
