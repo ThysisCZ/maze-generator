@@ -36,8 +36,6 @@ typedef struct
 {
     Cell cells[CELL_COUNT];
     bool walls_broken[NEIGHBOR_COUNT][MAX_DIRECTIONS];
-    int stack[NEIGHBOR_COUNT];
-    int stack_index;
     int wall_index;
     int start_index;
     Player player;
@@ -190,7 +188,6 @@ static int get_neighbor_index(int current_index, int direction)
 
 void carve_path(Maze *maze, int current_index)
 {
-    maze->stack[maze->stack_index++] = current_index;
     maze->cells[current_index].visited = true;
 
     int col = current_index % GRID_WIDTH;
@@ -200,96 +197,66 @@ void carve_path(Maze *maze, int current_index)
     int directions[MAX_DIRECTIONS] = {-1, -1, -1, -1};
     int neighbor_count = 0;
 
-    // Stack existing neighbor positions and directions
+    // Stack unvisited neighbor positions and directions
     if (col < GRID_WIDTH - 1)
     {
-        neighbors[neighbor_count] = get_neighbor_index(current_index, RIGHT);
-        directions[neighbor_count] = RIGHT;
-        neighbor_count++;
+        int neighbor_index = get_neighbor_index(current_index, RIGHT);
+
+        if (!maze->cells[neighbor_index].visited)
+        {
+            neighbors[neighbor_count] = get_neighbor_index(current_index, RIGHT);
+            directions[neighbor_count] = RIGHT;
+            neighbor_count++;
+        }
     }
 
     if (row < GRID_HEIGHT - 1)
     {
-        neighbors[neighbor_count] = get_neighbor_index(current_index, BOTTOM);
-        directions[neighbor_count] = BOTTOM;
-        neighbor_count++;
+        int neighbor_index = get_neighbor_index(current_index, BOTTOM);
+
+        if (!maze->cells[neighbor_index].visited)
+        {
+            neighbors[neighbor_count] = get_neighbor_index(current_index, BOTTOM);
+            directions[neighbor_count] = BOTTOM;
+            neighbor_count++;
+        }
     }
 
     if (col > 0)
     {
-        neighbors[neighbor_count] = get_neighbor_index(current_index, LEFT);
-        directions[neighbor_count] = LEFT;
-        neighbor_count++;
+        int neighbor_index = get_neighbor_index(current_index, LEFT);
+
+        if (!maze->cells[neighbor_index].visited)
+        {
+            neighbors[neighbor_count] = get_neighbor_index(current_index, LEFT);
+            directions[neighbor_count] = LEFT;
+            neighbor_count++;
+        }
     }
 
     if (row > 0)
     {
-        neighbors[neighbor_count] = get_neighbor_index(current_index, TOP);
-        directions[neighbor_count] = TOP;
-        neighbor_count++;
-    }
+        int neighbor_index = get_neighbor_index(current_index, TOP);
 
-    int random_nb = GetRandomValue(0, neighbor_count - 1);
-    int next_index = neighbors[random_nb];
-    int direction = directions[random_nb];
-
-    // Handle already visited neighbors
-    if (maze->cells[next_index].visited)
-    {
-        int visited_nb_count = 0;
-
-        // Check if other directions have an unvisited neighbor
-        for (int i = 0; i < neighbor_count; i++)
+        if (!maze->cells[neighbor_index].visited)
         {
-            if (!maze->cells[neighbors[i]].visited)
-            {
-                random_nb = i;
-                next_index = neighbors[random_nb];
-                direction = directions[random_nb];
-            }
-            else
-            {
-                visited_nb_count++;
-            }
-        }
-
-        // Backtrack after dead end
-        if (visited_nb_count == neighbor_count)
-        {
-            while (maze->stack_index > 0)
-            {
-                maze->stack_index--;
-                current_index = maze->stack[maze->stack_index];
-
-                // Search for unvisited neighbors
-                for (int i = 0; i < MAX_DIRECTIONS; i++)
-                {
-                    next_index = get_neighbor_index(current_index, i);
-                    direction = directions[i];
-
-                    float current_pos_x = maze->cells[current_index].pos.x;
-                    float current_pos_y = maze->cells[current_index].pos.y;
-
-                    float next_pos_x = maze->cells[next_index].pos.x;
-                    float next_pos_y = maze->cells[next_index].pos.y;
-
-                    // Check the distance between the current cell and neighbor
-                    bool neighbor_near = abs(next_pos_x - current_pos_x) <= 2 * CELL_SIZE &&
-                                         abs(next_pos_y - current_pos_y) <= 2 * CELL_SIZE;
-
-                    // Start again from the current cell when an unvisited neighbor is near
-                    if (next_index >= 0 && !maze->cells[next_index].visited && neighbor_near)
-                    {
-                        carve_path(maze, current_index);
-                    }
-                }
-            }
+            neighbors[neighbor_count] = get_neighbor_index(current_index, TOP);
+            directions[neighbor_count] = TOP;
+            neighbor_count++;
         }
     }
+
+    int current_nb = 0;
+    int next_index = neighbors[current_nb];
 
     // Handle neighbors that are not visited yet
-    if (next_index >= 0 && !maze->cells[next_index].visited)
+    while (next_index >= 0 && !maze->cells[next_index].visited)
     {
+        // Pick random unvisited neighbor
+        current_nb = GetRandomValue(0, neighbor_count - 1);
+        next_index = neighbors[current_nb];
+
+        int direction = directions[current_nb];
         int opposite_direction = (direction + 2) % MAX_DIRECTIONS;
 
         // Mark the wall as broken
@@ -301,6 +268,18 @@ void carve_path(Maze *maze, int current_index)
         maze->cells[maze->wall_index].pos = wall_pos;
 
         carve_path(maze, next_index);
+    }
+
+    // Search for unvisited neighbors when backtracking
+    for (int i = 0; i < MAX_DIRECTIONS; i++)
+    {
+        next_index = neighbors[i];
+
+        // Start again from the first cell with unvisited neighbor
+        if (next_index >= 0 && !maze->cells[next_index].visited)
+        {
+            carve_path(maze, current_index);
+        }
     }
 }
 
@@ -372,8 +351,6 @@ void update_player(Maze *maze)
     {
         maze->player.pos.x = 3 * CELL_SIZE / 2;
         maze->player.pos.y = 3 * CELL_SIZE / 2;
-
-        maze->stack_index = 0;
         maze->wall_index = NEIGHBOR_COUNT - 1;
 
         init_grid(maze);
@@ -391,7 +368,6 @@ int main()
 
     Maze maze;
 
-    maze.stack_index = 0;
     maze.wall_index = NEIGHBOR_COUNT - 1;
     maze.start_index = 0;
 
