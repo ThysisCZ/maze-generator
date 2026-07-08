@@ -247,40 +247,35 @@ void carve_path(Maze *maze, int current_index)
         }
     }
 
-    int current_nb = 0;
-    int next_index = neighbors[current_nb];
-
-    // Handle neighbors that are not visited yet
-    while (next_index >= 0 && !maze->cells[next_index].visited)
+    // Handle all current unvisited neighbors
+    while (neighbor_count > 0)
     {
         // Pick random unvisited neighbor
-        current_nb = GetRandomValue(0, neighbor_count - 1);
-        next_index = neighbors[current_nb];
+        int current_nb = GetRandomValue(0, neighbor_count - 1);
+        int next_index = neighbors[current_nb];
 
-        int direction = directions[current_nb];
-        int opposite_direction = (direction + 2) % MAX_DIRECTIONS;
-
-        // Mark the wall as broken
-        maze->walls_broken[current_index][direction] = true;
-        maze->walls_broken[next_index][opposite_direction] = true;
-        maze->wall_index++;
-
-        Vector2 wall_pos = get_wall_position(current_index, direction, maze);
-        maze->cells[maze->wall_index].pos = wall_pos;
-
-        carve_path(maze, next_index);
-    }
-
-    // Search for unvisited neighbors when backtracking
-    for (int i = 0; i < MAX_DIRECTIONS; i++)
-    {
-        next_index = neighbors[i];
-
-        // Start again from the first cell with unvisited neighbor
-        if (next_index >= 0 && !maze->cells[next_index].visited)
+        // Recursively carve from an existing unvisited neighbor
+        if (!maze->cells[next_index].visited)
         {
-            carve_path(maze, current_index);
+            int direction = directions[current_nb];
+            int opposite_direction = (direction + 2) % MAX_DIRECTIONS;
+
+            // Mark the wall as broken
+            maze->walls_broken[current_index][direction] = true;
+            maze->walls_broken[next_index][opposite_direction] = true;
+            maze->wall_index++;
+
+            Vector2 wall_pos = get_wall_position(current_index, direction, maze);
+            maze->cells[maze->wall_index].pos = wall_pos;
+
+            carve_path(maze, next_index);
         }
+
+        // Remove the picked neighbor from the list
+        neighbor_count--;
+
+        neighbors[current_nb] = neighbors[neighbor_count];
+        directions[current_nb] = directions[neighbor_count];
     }
 }
 
